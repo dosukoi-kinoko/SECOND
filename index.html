@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#bfe3ff" />
+<title>シロクマ天使のキューピッド大作戦</title>
+<style>
+  :root { --ink:#5a4a6a; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body {
+    height:100%; overflow:hidden;
+    background:#a8d8f0;
+    font-family:"Hiragino Maru Gothic ProN","Rounded Mplus 1c",system-ui,sans-serif;
+    color:var(--ink);
+    user-select:none; -webkit-user-select:none; touch-action:none;
+  }
+  #wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  canvas { display:block; touch-action:none; }
+  /* overlays */
+  .layer {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
+    pointer-events:none;
+  }
+  .layer.show { pointer-events:auto; }
+  .panel {
+    background:rgba(255,255,255,.82); border-radius:26px; padding:26px 30px;
+    box-shadow:0 10px 30px rgba(120,140,200,.35); max-width:84%;
+    backdrop-filter:blur(2px);
+  }
+  h1 { font-size:clamp(22px,6.4vw,34px); line-height:1.3; color:#ff8fb1; text-shadow:0 2px 0 #fff; }
+  h1 small { display:block; font-size:.5em; color:#7aa7d8; margin-top:6px; letter-spacing:.05em;}
+  p.sub { margin:14px 0 4px; font-size:clamp(13px,3.6vw,16px); line-height:1.7; color:#6b6480; }
+  .btn {
+    margin-top:18px; pointer-events:auto; cursor:pointer; border:none;
+    font-family:inherit; font-weight:700; color:#fff;
+    background:linear-gradient(180deg,#ffb3cc,#ff8fb1);
+    padding:14px 30px; border-radius:999px; font-size:clamp(16px,4.4vw,20px);
+    box-shadow:0 6px 0 #e9709a, 0 8px 18px rgba(233,112,154,.5);
+    transition:transform .06s, box-shadow .06s;
+  }
+  .btn:active { transform:translateY(4px); box-shadow:0 2px 0 #e9709a, 0 3px 10px rgba(233,112,154,.5); }
+  .hidden { display:none !important; }
+  .tiny { font-size:12px; color:#8a86a0; margin-top:12px; }
+  @keyframes pop { 0%{transform:scale(.6);opacity:0} 60%{transform:scale(1.08)} 100%{transform:scale(1);opacity:1} }
+  .panel.anim { animation:pop .35s ease-out; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<!-- TITLE -->
+<div id="title" class="layer show">
+  <div class="panel anim">
+    <h1>シロクマ天使の<br>キューピッド大作戦<small>♡ LOVE LETTER DELIVERY ♡</small></h1>
+    <p class="sub">タップ／クリック／スペースで<b>ふわっ</b>と浮く。<br>トゲをよけ、星をあつめ、空をのぼろう。<br>てっぺんの3人から<b>本物のお相手</b>を見ぬいて<br>ラブレターを届けてね。</p>
+    <button class="btn" id="startBtn">あそぶ ▶</button>
+    <p class="tiny">ヒント：依頼主は本命に近づくとドキドキするよ💓</p>
+  </div>
+</div>
+
+<!-- MISSION INTRO -->
+<div id="intro" class="layer">
+  <div class="panel anim" id="introPanel">
+    <h1 id="introTitle" style="color:#7aa7d8">ステージ1</h1>
+    <p class="sub" id="introText"></p>
+    <button class="btn" id="goBtn">スタート！</button>
+  </div>
+</div>
+
+<!-- RESULT -->
+<div id="result" class="layer">
+  <div class="panel anim">
+    <h1 id="resultTitle"></h1>
+    <p class="sub" id="resultText"></p>
+    <button class="btn" id="nextBtn">つぎへ ▶</button>
+  </div>
+</div>
+
+<!-- STAGE CLEAR -->
+<div id="clear" class="layer">
+  <div class="panel anim">
+    <h1 style="color:#ff8fb1">ステージ クリア！🎉</h1>
+    <p class="sub" id="clearText"></p>
+    <button class="btn" id="replayBtn">もういちど ▶</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   シロクマ天使のキューピッド大作戦  —  単一HTML / 画像・音源ファイル0 / 依存0
+   全キャラ・全SEを Canvas2D + WebAudio で生成。GitHub Pages 等で無料公開可。
+   ========================================================================= */
+
+/* ---------- 論理解像度（縦長）。実画面へレターボックスでフィット ---------- */
+const W = 450, H = 800;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let scale = 1, offX = 0, offY = 0;
+
+function fit(){
+  const vw = window.innerWidth, vh = window.innerHeight;
+  scale = Math.min(vw / W, vh / H);
+  const cw = Math.round(W * scale), ch = Math.round(H * scale);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = cw * dpr; canvas.height = ch * dpr;
+  canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  scale = scale; offX = 0; offY = 0;
+  // draw uses logical units; scale the context once per frame instead
+}
+window.addEventListener('resize', fit); fit();
+
+/* convert pointer position (client px) -> logical game coords */
+function toGame(clientX, clientY){
+  const r = canvas.getBoundingClientRect();
+  return { x:(clientX - r.left)/(r.width)*W, y:(clientY - r.top)/(r.height)*H };
+}
+
+/* =========================================================================
+   AUDIO  —  WebAudio で「プヨン」その他を合成（ファイル不要）
+   ========================================================================= */
+const Audio2 = (() => {
+  let ac = null;
+  const ensure = () => { if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==='suspended') ac.resume(); return ac; };
+  function tone(t){
+    const a = ensure(); const now = a.currentTime;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = t.type||'sine';
+    o.frequency.setValueAtTime(t.f0, now);
+    if(t.f1) o.frequency.exponentialRampToValueAtTime(t.f1, now + t.dur);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(t.vol||0.25, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + t.dur);
+    o.connect(g).connect(a.destination);
+    o.start(now); o.stop(now + t.dur + 0.02);
+  }
+  return {
+    unlock(){ try{ ensure(); }catch(e){} },
+    // 中毒性の核：プヨンっと跳ねる音（周波数を上→下→軽く戻す）
+    puyon(){
+      const a = ensure(); const now = a.currentTime;
+      const o = a.createOscillator(), g = a.createGain();
+      o.type='sine';
+      o.frequency.setValueAtTime(680, now);
+      o.frequency.exponentialRampToValueAtTime(330, now+0.07);
+      o.frequency.exponentialRampToValueAtTime(520, now+0.14);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(0.3, now+0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, now+0.18);
+      o.connect(g).connect(a.destination);
+      o.start(now); o.stop(now+0.2);
+    },
+    star(){ tone({type:'triangle',f0:880,f1:1760,dur:0.16,vol:0.22}); setTimeout(()=>tone({type:'triangle',f0:1320,f1:2640,dur:0.12,vol:0.18}),70); },
+    hurt(){ tone({type:'sawtooth',f0:220,f1:80,dur:0.22,vol:0.28}); },
+    success(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone({type:'triangle',f0:f,f1:f*1.5,dur:0.3,vol:0.22}),i*120)); },
+    fail(){ tone({type:'sine',f0:400,f1:160,dur:0.4,vol:0.25}); setTimeout(()=>tone({type:'sine',f0:300,f1:120,dur:0.5,vol:0.22}),160); }
+  };
+})();
+
+/* =========================================================================
+   描画ヘルパ
+   ========================================================================= */
+const TAU = Math.PI*2;
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function circle(x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.closePath(); }
+function heartPath(cx,cy,s){
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + s*0.35);
+  ctx.bezierCurveTo(cx - s, cy - s*0.5, cx - s*0.6, cy - s*1.1, cx, cy - s*0.45);
+  ctx.bezierCurveTo(cx + s*0.6, cy - s*1.1, cx + s, cy - s*0.5, cx, cy + s*0.35);
+  ctx.closePath();
+}
+
+/* ---- 背景：青空 + 雲（パステル） ---- */
+const clouds = [];
+for(let i=0;i<7;i++) clouds.push({ x:Math.random()*W, y:Math.random()*H, s:30+Math.random()*40, sp:6+Math.random()*10 });
+function drawCloud(x,y,s){
+  ctx.fillStyle='rgba(255,255,255,0.92)';
+  circle(x,y,s*0.6); ctx.fill();
+  circle(x-s*0.7,y+s*0.15,s*0.45); ctx.fill();
+  circle(x+s*0.7,y+s*0.15,s*0.5); ctx.fill();
+  rr(x-s*0.9,y+s*0.05,s*1.8,s*0.55,s*0.3); ctx.fill();
+}
+function drawSky(){
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#bfe6ff'); g.addColorStop(0.6,'#d6f0ff'); g.addColorStop(1,'#eafaf1');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  for(const c of clouds) drawCloud(c.x,c.y,c.s);
+}
+
+/* ---- シロクマ天使（キューピッド） ---- */
+function drawBear(x,y,t,flap){
+  ctx.save(); ctx.translate(x,y);
+  const wob = Math.sin(t*0.012)*3;
+  // 羽（はばたき）
+  const wing = Math.sin(t*0.02)*0.5 + (flap?0.6:0);
+  ctx.fillStyle='rgba(255,255,255,0.95)';
+  for(const dir of [-1,1]){
+    ctx.save(); ctx.scale(dir,1); ctx.translate(20,-4); ctx.rotate(-0.5 - wing*0.4);
+    ctx.beginPath(); ctx.moveTo(0,0);
+    ctx.quadraticCurveTo(34,-22,40,4); ctx.quadraticCurveTo(30,2,24,12);
+    ctx.quadraticCurveTo(22,2,0,0); ctx.fill();
+    ctx.strokeStyle='rgba(180,210,240,.7)'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.restore();
+  }
+  // 体
+  ctx.fillStyle='#fff';
+  circle(0,8+wob,21); ctx.fill();
+  // 足
+  circle(-9,26+wob,8); ctx.fill(); circle(9,26+wob,8); ctx.fill();
+  // 頭
+  circle(0,-16,20); ctx.fill();
+  // 耳
+  circle(-15,-30,8); ctx.fill(); circle(15,-30,8); ctx.fill();
+  ctx.fillStyle='#ffd2e2'; circle(-15,-30,4); ctx.fill(); circle(15,-30,4); ctx.fill();
+  // ほっぺ
+  ctx.fillStyle='#ffc6da'; circle(-12,-12,5); ctx.fill(); circle(12,-12,5); ctx.fill();
+  // 目
+  ctx.fillStyle='#4a3a55'; circle(-7,-17,3); ctx.fill(); circle(7,-17,3); ctx.fill();
+  ctx.fillStyle='#fff'; circle(-6,-18,1.1); ctx.fill(); circle(8,-18,1.1); ctx.fill();
+  // 鼻
+  ctx.fillStyle='#9a7a8a'; circle(0,-11,2.2); ctx.fill();
+  // 天使の輪
+  const hy = -38 + Math.sin(t*0.02)*1.5;
+  ctx.strokeStyle='#ffe08a'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.ellipse(0,hy,12,4.5,0,0,TAU); ctx.stroke();
+  ctx.strokeStyle='rgba(255,240,160,.6)'; ctx.lineWidth=7; ctx.stroke();
+  // 手紙（抱えてる）
+  ctx.fillStyle='#fff7fa'; rr(-9,6,18,13,3); ctx.fill();
+  ctx.strokeStyle='#ff9bbb'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-9,6); ctx.lineTo(0,13); ctx.lineTo(9,6); ctx.stroke();
+  ctx.fillStyle='#ff7fa6'; heartPath(0,11,3); ctx.fill();
+  ctx.restore();
+}
+
+/* ---- 擬人化キャラ顔（依頼主HUD & 候補で共用） ---- */
+function critterFace(kind, x, y, r, mood){
+  // mood: 'idle' | 'love'(ドキドキ) | 'sad' | 'joy'
+  ctx.save(); ctx.translate(x,y);
+  let base='#fff', ear='#fff', cheek='#ffc6da';
+  if(kind==='cat'){ base='#ffe0c2'; ear='#ffcf9e'; }
+  if(kind==='dog'){ base='#f3d9b0'; ear='#caa173'; }
+  if(kind==='elephant'){ base='#cfd6ff'; ear='#b7c0ff'; }
+  if(kind==='rabbit'){ base='#ffffff'; ear='#ffe3ee'; }
+  // 耳
+  ctx.fillStyle=ear;
+  if(kind==='cat'){ ctx.beginPath(); ctx.moveTo(-r*0.7,-r*0.5); ctx.lineTo(-r*0.9,-r*1.25); ctx.lineTo(-r*0.2,-r*0.78); ctx.closePath(); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(r*0.7,-r*0.5); ctx.lineTo(r*0.9,-r*1.25); ctx.lineTo(r*0.2,-r*0.78); ctx.closePath(); ctx.fill(); }
+  else if(kind==='dog'){ ctx.beginPath(); ctx.ellipse(-r*0.85,-r*0.2,r*0.32,r*0.6,0.4,0,TAU); ctx.fill();
+                         ctx.beginPath(); ctx.ellipse(r*0.85,-r*0.2,r*0.32,r*0.6,-0.4,0,TAU); ctx.fill(); }
+  else if(kind==='rabbit'){ ctx.beginPath(); ctx.ellipse(-r*0.45,-r*1.2,r*0.26,r*0.7,0.1,0,TAU); ctx.fill();
+                            ctx.beginPath(); ctx.ellipse(r*0.45,-r*1.2,r*0.26,r*0.7,-0.1,0,TAU); ctx.fill(); }
+  else if(kind==='elephant'){ circle(-r*0.85,-r*0.2,r*0.5); ctx.fill(); circle(r*0.85,-r*0.2,r*0.5); ctx.fill(); }
+  // 顔
+  ctx.fillStyle=base; circle(0,0,r); ctx.fill();
+  // 象の鼻
+  if(kind==='elephant'){ ctx.fillStyle=base; rr(-r*0.18,r*0.1,r*0.36,r*0.95,r*0.18); ctx.fill(); }
+  // ほっぺ
+  ctx.fillStyle=cheek; circle(-r*0.55,r*0.15,r*0.2); ctx.fill(); circle(r*0.55,r*0.15,r*0.2); ctx.fill();
+  // 目
+  ctx.fillStyle='#4a3a55';
+  if(mood==='joy'){ // ＞＜
+    ctx.lineWidth=r*0.12; ctx.strokeStyle='#4a3a55';
+    ctx.beginPath(); ctx.moveTo(-r*0.5,-r*0.25); ctx.lineTo(-r*0.2,-r*0.05); ctx.lineTo(-r*0.5,r*0.1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(r*0.5,-r*0.25); ctx.lineTo(r*0.2,-r*0.05); ctx.lineTo(r*0.5,r*0.1); ctx.stroke();
+  } else {
+    const ey = mood==='sad'? -r*0.05 : -r*0.1;
+    circle(-r*0.32,ey,r*0.13); ctx.fill(); circle(r*0.32,ey,r*0.13); ctx.fill();
+    ctx.fillStyle='#fff'; circle(-r*0.28,ey-r*0.04,r*0.05); ctx.fill(); circle(r*0.36,ey-r*0.04,r*0.05); ctx.fill();
+  }
+  // 口
+  ctx.strokeStyle='#9a7a8a'; ctx.lineWidth=r*0.09; ctx.beginPath();
+  if(mood==='sad'){ ctx.arc(0,r*0.6,r*0.28,Math.PI*1.15,Math.PI*1.85); }
+  else if(mood==='love'||mood==='joy'){ ctx.arc(0,r*0.28,r*0.22,0.1*Math.PI,0.9*Math.PI); }
+  else { ctx.arc(0,r*0.32,r*0.16,0.1*Math.PI,0.9*Math.PI); }
+  ctx.stroke();
+  // ドキドキの小ハート
+  if(mood==='love'){
+    const tt = performance.now();
+    for(let i=0;i<2;i++){
+      const ph=(tt*0.002 + i*0.5)%1;
+      ctx.globalAlpha = 1-ph;
+      ctx.fillStyle='#ff6f9d';
+      heartPath(r*0.9, -r*0.6 - ph*r*1.2, r*0.22*(1-ph*0.3));
+      ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+  // しょんぼり涙
+  if(mood==='sad'){ ctx.fillStyle='rgba(120,180,255,.85)'; circle(-r*0.32,r*0.25,r*0.08); ctx.fill(); }
+  ctx.restore();
+}
+
+/* =========================================================================
+   ゲーム状態
+   ========================================================================= */
+const State = { TITLE:0, INTRO:1, PLAY:2, JUDGE:3, RESULT:4, CLEAR:5 };
+let state = State.TITLE;
+
+const KINDS = ['dog','cat','elephant']; // ステージ1の候補
+const STAGE = {
+  client:'cat',           // 依頼主
+  clientName:'ネコちゃん',
+  loves:'elephant',       // 本命
+  totalMissions:5,
+};
+
+let game = null;
+function newRun(){
+  game = { mission:1, score:0, lives:3 };
+}
+
+let lvl = null; // 現ミッションの状態
+function newMission(){
+  // 候補を縦3段に配置（毎回シャッフル）。ミッションが進むほど障害物増＆候補シルエット化
+  const order = KINDS.slice().sort(()=>Math.random()-0.5);
+  const slotY = [H*0.18, H*0.40, H*0.62];
+  const cands = order.map((k,i)=>({ kind:k, x:W-78, y:slotY[i], r:34, mood:'idle', revealed: game.mission<=2 }));
+  lvl = {
+    t:0,
+    bear:{ x:60, y:H-90, vy:0, hitT:0 },
+    progress:0,                       // 0..1（上昇の進捗）
+    speed:1.0 + game.mission*0.12,    // スクロール速度
+    spikes:[], stars:[], particles:[],
+    spawnT:0, starT:0,
+    cands, chosen:null,
+    judgeT:0,
+    targetIdx: order.indexOf(STAGE.loves),
+    silhouette: game.mission>2,       // 穴②対策：3ミッション目から正体を隠す
+  };
+}
+
+/* ---------- 入力：浮く ---------- */
+let flapFlash = 0;
+function flap(){
+  if(state===State.PLAY || state===State.JUDGE){
+    lvl.bear.vy = -5.6;
+    flapFlash = 6;
+    Audio2.puyon();
+    // プヨン粒子
+    for(let i=0;i<4;i++) lvl.particles.push({x:lvl.bear.x,y:lvl.bear.y+18,vx:(Math.random()-0.5)*2,vy:1+Math.random()*1.5,life:18,c:'#ffd0e2'});
+  }
+}
+function onDown(e){
+  Audio2.unlock();
+  if(state===State.PLAY || state===State.JUDGE) flap();
+}
+canvas.addEventListener('pointerdown', onDown);
+window.addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); Audio2.unlock(); if(state===State.PLAY||state===State.JUDGE) flap(); } });
+
+/* =========================================================================
+   UI 制御
+   ========================================================================= */
+const ui = {
+  title:document.getElementById('title'),
+  intro:document.getElementById('intro'),
+  result:document.getElementById('result'),
+  clear:document.getElementById('clear'),
+};
+function showLayer(name){
+  for(const k in ui){ ui[k].classList.remove('show'); if(k!==name) ui[k].classList.add('hiddenSoft'); }
+  for(const k in ui){ ui[k].style.opacity = (k===name)?'1':'0'; ui[k].style.pointerEvents=(k===name)?'auto':'none'; ui[k].querySelector('.panel').classList.remove('anim'); }
+  if(name){ ui[name].classList.add('show'); void ui[name].offsetWidth; ui[name].querySelector('.panel').classList.add('anim'); }
+}
+// 初期：タイトルのみ
+for(const k in ui){ if(k!=='title'){ ui[k].style.opacity='0'; ui[k].style.pointerEvents='none'; } }
+
+document.getElementById('startBtn').onclick = ()=>{ Audio2.unlock(); newRun(); gotoIntro(); };
+document.getElementById('goBtn').onclick = ()=>{ startMission(); };
+document.getElementById('nextBtn').onclick = ()=>{ afterResult(); };
+document.getElementById('replayBtn').onclick = ()=>{ newRun(); gotoIntro(); };
+
+function gotoIntro(){
+  state = State.INTRO;
+  document.getElementById('introTitle').textContent = `ステージ1 ・ ミッション ${game.mission}/${STAGE.totalMissions}`;
+  const tips = [
+    `${STAGE.clientName}からラブレターを預かったよ。<br>本命のお相手にそっと届けてね💌`,
+    `空を のぼって 3人のところへ。<br>${STAGE.clientName}がドキドキする相手が本命！`,
+    `トゲは痛い！よけてね。星はボーナス⭐`,
+  ];
+  document.getElementById('introText').innerHTML = tips[(game.mission-1)%tips.length] + (lvl&&false?'':'');
+  document.getElementById('introText').innerHTML = `${STAGE.clientName}からのラブレター💌<br>本命にそっと近づくと、依頼主が<b>ドキドキ💓</b>。<br>反応を見くらべて、本物に届けよう！`;
+  showLayer('intro');
+}
+function startMission(){
+  newMission();
+  state = State.PLAY;
+  showLayer(null);
+}
+
+/* =========================================================================
+   更新
+   ========================================================================= */
+function updatePlay(dt){
+  const b = lvl.bear;
+  lvl.t += dt; lvl.speed;
+  // 物理
+  b.vy += 0.32;                 // ふんわり重力
+  if(b.vy>7) b.vy=7;
+  b.y += b.vy;
+  // 進捗（てっぺん目指して右上へ：xはprogressに連動）
+  lvl.progress += 0.0016*lvl.speed*dt;
+  b.x = 60 + (W*0.5)*lvl.progress; // 左下→右へドリフト
+  // 上下の壁
+  if(b.y<40){ b.y=40; b.vy=0; }
+  if(b.y>H-40){ b.y=H-40; b.vy=0; damage(); }
+  if(b.hitT>0) b.hitT-=dt;
+
+  // 雲スクロール
+  for(const c of clouds){ c.y += 0.15*lvl.speed*dt*0.5; if(c.y>H+40){ c.y=-40; c.x=Math.random()*W; } }
+
+  // トゲ生成（上から落下）
+  lvl.spawnT -= dt;
+  const interval = Math.max(34, 78 - game.mission*7);
+  if(lvl.spawnT<=0 && lvl.progress<0.96){
+    lvl.spawnT = interval/ (0.5+lvl.speed*0.5);
+    lvl.spikes.push({ x:40+Math.random()*(W-80), y:-20, vy:1.8+Math.random()*1.2+lvl.speed*0.4, r:15, spin:Math.random()*TAU });
+  }
+  // 星生成
+  lvl.starT -= dt;
+  if(lvl.starT<=0 && lvl.progress<0.95){
+    lvl.starT = 90 + Math.random()*60;
+    lvl.stars.push({ x:40+Math.random()*(W-80), y:-20, vy:1.6+lvl.speed*0.3, r:12, got:false, spin:0 });
+  }
+  // トゲ更新＆当たり
+  for(const s of lvl.spikes){ s.y+=s.vy*dt*0.5; s.spin+=0.05*dt; }
+  for(const s of lvl.stars){ s.y+=s.vy*dt*0.5; s.spin+=0.06*dt; }
+  for(const s of lvl.spikes){
+    if(b.hitT<=0 && Math.hypot(s.x-b.x,s.y-b.y) < s.r+16){ s.y=H+99; damage(); }
+  }
+  for(const s of lvl.stars){
+    if(!s.got && Math.hypot(s.x-b.x,s.y-b.y) < s.r+18){ s.got=true; game.score+=10; Audio2.star();
+      for(let i=0;i<8;i++) lvl.particles.push({x:s.x,y:s.y,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,life:22,c:'#ffe98a'}); }
+  }
+  lvl.spikes = lvl.spikes.filter(s=>s.y<H+30);
+  lvl.stars  = lvl.stars.filter(s=>!s.got && s.y<H+30);
+  // 粒子
+  for(const p of lvl.particles){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.1; p.life-=dt; }
+  lvl.particles = lvl.particles.filter(p=>p.life>0);
+
+  // てっぺん到達 → 判定フェーズ
+  if(lvl.progress>=1){ lvl.progress=1; enterJudge(); }
+}
+
+function damage(){
+  const b=lvl.bear; if(b.hitT>0) return;
+  game.lives--; b.hitT=60; b.vy=-3.5;
+  Audio2.hurt();
+  for(let i=0;i<10;i++) lvl.particles.push({x:b.x,y:b.y,vx:(Math.random()-0.5)*5,vy:(Math.random()-0.5)*5,life:24,c:'#ff9a9a'});
+  if(game.lives<=0) toResult(false, 'おっとっと…ハートが尽きちゃった💧');
+}
+
+const HOVER_X = W-150;      // 判定フェーズの熊のホバー位置
+const DWELL_MAX = 46;       // この時間そろえ続けると「届ける」確定（約0.8秒）
+function enterJudge(){
+  state = State.JUDGE;
+  lvl.judgeT = 0; lvl.dwell = 0; lvl.dwellIdx = -1;
+}
+function updateJudge(dt){
+  const b = lvl.bear;
+  lvl.judgeT += dt;
+  b.vy += 0.32; if(b.vy>7)b.vy=7; b.y+=b.vy;
+  if(b.y<40){b.y=40;b.vy=0;} if(b.y>H-40){b.y=H-40;b.vy=0;}
+  // ホバー位置までゆっくり寄って、あとは高さ合わせ勝負
+  if(b.x < HOVER_X) b.x += 1.1*dt*0.5; else b.x = HOVER_X;
+  // 粒子
+  for(const p of lvl.particles){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.1; p.life-=dt; }
+  lvl.particles = lvl.particles.filter(p=>p.life>0);
+
+  // 高さがそろっている候補を判定（＝今ねらっている相手）
+  let near=-1;
+  lvl.cands.forEach((c,i)=>{ c.mood='idle'; if(Math.abs(c.y-b.y) < c.r){ near=i; } });
+
+  if(near>=0 && b.x>=HOVER_X-2){
+    // ねらい中：依頼主が反応（本命ならドキドキ）＝ヒント
+    if(lvl.dwellIdx!==near){ lvl.dwellIdx=near; lvl.dwell=0; }
+    lvl.dwell += dt;
+    const isLove = (near===lvl.targetIdx);
+    lvl.cands[near].mood = isLove ? 'love' : 'idle';
+    clientMood = isLove ? 'love' : 'idle';
+    if(lvl.dwell >= DWELL_MAX){ deliver(near); }
+  } else {
+    lvl.dwell = 0; lvl.dwellIdx = -1; clientMood = 'idle';
+  }
+}
+
+let clientMood='idle';
+function deliver(idx){
+  lvl.chosen = idx;
+  const correct = (idx===lvl.targetIdx);
+  lvl.cands.forEach((c,i)=>c.revealed=true);
+  if(correct){
+    lvl.cands[idx].mood='joy';
+    game.score += 50 + game.lives*20;
+    Audio2.success();
+    state = State.RESULT_ANIM; // 成功演出（赤い糸＆ハート）
+    successAnim = { t:0, from:{x:46,y:H-46}, to:lvl.cands[idx] };
+  } else {
+    lvl.cands[idx].mood='joy';       // ぬか喜び
+    clientMood='sad';                // 依頼主しょんぼり
+    Audio2.fail();
+    toResult(false, `あぁ…そこは違ったみたい。\n${STAGE.clientName}がしょんぼり、お相手はぬか喜び💧`);
+  }
+}
+
+/* 成功演出（赤い糸がハートを描く） */
+State.RESULT_ANIM = 6;
+let successAnim = null;
+function updateSuccess(dt){
+  successAnim.t += dt;
+  if(successAnim.t>120){
+    toResult(true, `本命にとどいた！💘\n運命の赤い糸がハートを描いたよ。\nキューピッド熊も大よろこび🐻✨`);
+  }
+}
+
+function toResult(win, msg){
+  state = State.RESULT;
+  document.getElementById('resultTitle').textContent = win? 'ミッション成功！💖' : 'ざんねん…💧';
+  document.getElementById('resultTitle').style.color = win? '#ff8fb1':'#7aa7d8';
+  document.getElementById('resultText').innerHTML = msg.replace(/\n/g,'<br>') + `<br><br>スコア：<b>${game.score}</b>　ハート：${'💗'.repeat(Math.max(0,game.lives))}`;
+  document.getElementById('nextBtn').textContent = win ? (game.mission>=STAGE.totalMissions?'けっか ▶':'つぎのミッション ▶') : 'もういちど ▶';
+  lvl._win = win;
+  showLayer('result');
+}
+function afterResult(){
+  if(lvl._win){
+    if(game.mission>=STAGE.totalMissions){ toClear(); return; }
+    game.mission++; gotoIntro();
+  } else {
+    if(game.lives<=0){ // 立て直し：ライフ補充して同ミッション再挑戦
+      game.lives=3;
+    }
+    gotoIntro();
+  }
+}
+function toClear(){
+  state=State.CLEAR;
+  document.getElementById('clearText').innerHTML =
+    `5つの恋を実らせた！🎊<br>最終スコア：<b>${game.score}</b><br><br>つぎのステージは準備中…<br>（このステージをもう一度あそべるよ）`;
+  showLayer('clear');
+}
+
+/* =========================================================================
+   描画
+   ========================================================================= */
+function drawSpike(s){
+  ctx.save(); ctx.translate(s.x,s.y); ctx.rotate(s.spin);
+  ctx.fillStyle='#ff9bb0'; ctx.strokeStyle='#e36b8c'; ctx.lineWidth=2;
+  const n=8;
+  ctx.beginPath();
+  for(let i=0;i<n*2;i++){ const a=i/(n*2)*TAU; const rad=(i%2===0)?s.r:s.r*0.45; ctx.lineTo(Math.cos(a)*rad,Math.sin(a)*rad); }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#fff'; circle(-3,-3,3); ctx.fill();
+  ctx.restore();
+}
+function drawStar(s){
+  ctx.save(); ctx.translate(s.x,s.y); ctx.rotate(s.spin*0.3);
+  const glow = 1+Math.sin(performance.now()*0.006)*0.15;
+  ctx.fillStyle='#ffe98a'; ctx.strokeStyle='#ffc24d'; ctx.lineWidth=2;
+  ctx.beginPath();
+  for(let i=0;i<10;i++){ const a=-Math.PI/2 + i/10*TAU; const rad=(i%2===0)?s.r*glow:s.r*0.45; ctx.lineTo(Math.cos(a)*rad,Math.sin(a)*rad); }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,.9)'; circle(-2,-2,2.5); ctx.fill();
+  ctx.restore();
+}
+function drawCandidate(c){
+  // 台座
+  ctx.fillStyle='rgba(255,255,255,.55)'; rr(c.x-40,c.y+c.r+4,80,14,7); ctx.fill();
+  if(!c.revealed){
+    // シルエット（？マークの繭）
+    ctx.fillStyle='rgba(150,160,200,.55)'; circle(c.x,c.y,c.r); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='bold 30px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('?',c.x,c.y+2);
+  } else {
+    critterFace(c.kind, c.x, c.y, c.r, c.mood);
+  }
+}
+
+function drawHUD(){
+  // 依頼主パネル（左上）— 反応でヒント
+  ctx.save();
+  ctx.fillStyle='rgba(255,255,255,.8)'; rr(8,8,128,58,16); ctx.fill();
+  const showMood = (state===State.JUDGE||state===State.RESULT_ANIM||state===State.RESULT)?clientMood:'idle';
+  critterFace(STAGE.client, 38, 37, 18, showMood);
+  ctx.fillStyle='#7a6a88'; ctx.font='bold 12px sans-serif'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('依頼主', 64, 26); ctx.fillText(STAGE.clientName, 64, 44);
+  ctx.restore();
+  // ライフ＆スコア（右上）
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.font='20px sans-serif';
+  ctx.fillText('💗'.repeat(Math.max(0,game.lives)), W-12, 24);
+  ctx.fillStyle='#5a4a6a'; ctx.font='bold 16px sans-serif';
+  ctx.fillText('⭐ '+game.score, W-12, 50);
+  // ミッション進捗バー（下）
+  const pw=W-24;
+  ctx.fillStyle='rgba(255,255,255,.5)'; rr(12,H-16,pw,8,4); ctx.fill();
+  ctx.fillStyle='#ffb3cc'; rr(12,H-16,pw*Math.min(1,lvl?lvl.progress:0),8,4); ctx.fill();
+  ctx.fillStyle='#7a6a88'; ctx.font='11px sans-serif'; ctx.textAlign='center';
+  ctx.fillText(`ミッション ${game.mission}/${STAGE.totalMissions}`, W/2, H-28);
+}
+
+function drawSuccessThread(){
+  const a=successAnim; const p=Math.min(1,a.t/90);
+  // 依頼主(HUD位置)と届け先の間に赤い糸でハート
+  const c1={x:38,y:37}, c2={x:a.to.x,y:a.to.y};
+  ctx.strokeStyle='#ff4f7e'; ctx.lineWidth=3; ctx.lineCap='round';
+  ctx.beginPath();
+  const steps=40;
+  for(let i=0;i<=steps*p;i++){
+    const tt=i/steps;
+    // 2点間にハート型の膨らみを描く補間
+    const mx=(c1.x+c2.x)/2, my=(c1.y+c2.y)/2 - 80;
+    const x=(1-tt)*(1-tt)*c1.x + 2*(1-tt)*tt*mx + tt*tt*c2.x;
+    const y=(1-tt)*(1-tt)*c1.y + 2*(1-tt)*tt*my + tt*tt*c2.y;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // 中央に育つハート
+  ctx.globalAlpha=Math.min(1,p*1.4);
+  ctx.fillStyle='#ff5f8c';
+  const hx=(c1.x+c2.x)/2, hy=(c1.y+c2.y)/2-30;
+  heartPath(hx,hy, 14+p*22 + Math.sin(a.t*0.1)*2); ctx.fill();
+  ctx.globalAlpha=1;
+  // キラキラ
+  for(let i=0;i<3;i++){ const ang=a.t*0.05+i*2.1; ctx.fillStyle='#fff'; circle(hx+Math.cos(ang)*40, hy+Math.sin(ang)*30, 2.5); ctx.fill(); }
+}
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+  drawSky();
+  if(state===State.PLAY || state===State.JUDGE || state===State.RESULT_ANIM || state===State.RESULT){
+    if(!lvl) return;
+    for(const p of lvl.particles){ ctx.globalAlpha=Math.max(0,p.life/24); ctx.fillStyle=p.c; circle(p.x,p.y,3); ctx.fill(); }
+    ctx.globalAlpha=1;
+    for(const s of lvl.stars) drawStar(s);
+    for(const s of lvl.spikes) drawSpike(s);
+    if(state!==State.PLAY){
+      for(const c of lvl.cands) drawCandidate(c);
+      // ねらい中の演出：照準ライン＋ためゲージ
+      if(state===State.JUDGE && lvl.dwellIdx>=0){
+        const c = lvl.cands[lvl.dwellIdx], b = lvl.bear;
+        ctx.strokeStyle='rgba(255,120,160,.6)'; ctx.lineWidth=2; ctx.setLineDash([5,5]);
+        ctx.beginPath(); ctx.moveTo(b.x+18,b.y); ctx.lineTo(c.x-c.r,c.y); ctx.stroke(); ctx.setLineDash([]);
+        const prog = Math.min(1, lvl.dwell/DWELL_MAX);
+        ctx.strokeStyle='#ff6f9d'; ctx.lineWidth=4;
+        ctx.beginPath(); ctx.arc(c.x,c.y,c.r+9,-Math.PI/2,-Math.PI/2+TAU*prog); ctx.stroke();
+      }
+    }
+    // 熊（ダメージ点滅）
+    const b=lvl.bear;
+    if(!(b.hitT>0 && Math.floor(b.hitT/4)%2===0)) drawBear(b.x,b.y,lvl.t, flapFlash>0);
+    if(flapFlash>0) flapFlash--;
+    if(state===State.RESULT_ANIM) drawSuccessThread();
+    drawHUD();
+  }
+}
+
+/* =========================================================================
+   メインループ（dt 正規化：60fps基準）
+   ========================================================================= */
+let last=performance.now();
+function loop(now){
+  let dt=(now-last)/16.667; last=now; if(dt>3)dt=3;
+  if(state===State.PLAY) updatePlay(dt);
+  else if(state===State.JUDGE) updateJudge(dt);
+  else if(state===State.RESULT_ANIM) updateSuccess(dt);
+  else { // タイトル等でも雲を流す
+    for(const c of clouds){ c.x += 0.2*dt; if(c.x>W+50)c.x=-50; }
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* デバッグ用フック（公開時に無害。テスト/検証で利用） */
+window.__dbg = {
+  get state(){ return state; }, set state(v){ state=v; },
+  get game(){ return game; }, get lvl(){ return lvl; },
+  forceJudge(){ if(lvl){ lvl.progress=1; enterJudge(); } },
+  forceWin(){ if(lvl){ deliver(lvl.targetIdx); } },
+};
+</script>
+</body>
+</html>
