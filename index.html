@@ -259,44 +259,88 @@ function drawBear(x,y,t,opt){
   ctx.restore();
 }
 
-/* ---- 擬人化キャラ（依頼主HUD・候補） ---- */
+/* ---- 擬人化キャラ（依頼主HUD・候補）：万人受けカワイイ顔 ---- */
 function critterFace(kind,x,y,r,mood,t){
   t=t||performance.now();
-  ctx.save(); ctx.translate(x,y);
-  let base='#fff', ear='#fff', cheek='#ffc6da';
-  if(kind==='cat'){ base='#ffe0c2'; ear='#ffcf9e'; }
-  if(kind==='dog'){ base='#f3d9b0'; ear='#caa173'; }
-  if(kind==='elephant'){ base='#cfd6ff'; ear='#b7c0ff'; }
+  const bob=Math.sin(t*0.004 + x*0.05)*r*0.025;     // ゆるい呼吸感
+  ctx.save(); ctx.translate(x,y+bob);
+  // やわらかパステル配色
+  let body,ear,inner,nose;
+  if(kind==='cat'){ body='#ffdcae'; ear='#ffcf9e'; inner='#ff9ec4'; nose='#ff8fb1'; }
+  else if(kind==='dog'){ body='#edc99e'; ear='#d3a772'; inner='#ffb0a0'; nose='#6b5a55'; }
+  else { body='#c8d2ff'; ear='#b6c2ff'; inner='#ffc6e0'; nose='#8f93c0'; }
+  const outline='rgba(90,74,106,.16)';
+  const eyeX=r*0.37, eyeY=r*0.05;
+
+  /* 耳（頭の後ろ） */
   ctx.fillStyle=ear;
-  if(kind==='cat'){ ctx.beginPath(); ctx.moveTo(-r*0.7,-r*0.5); ctx.lineTo(-r*0.9,-r*1.25); ctx.lineTo(-r*0.2,-r*0.78); ctx.closePath(); ctx.fill();
-                    ctx.beginPath(); ctx.moveTo(r*0.7,-r*0.5); ctx.lineTo(r*0.9,-r*1.25); ctx.lineTo(r*0.2,-r*0.78); ctx.closePath(); ctx.fill(); }
-  else if(kind==='dog'){ ctx.beginPath(); ctx.ellipse(-r*0.85,-r*0.2,r*0.32,r*0.6,0.4,0,TAU); ctx.fill();
-                         ctx.beginPath(); ctx.ellipse(r*0.85,-r*0.2,r*0.32,r*0.6,-0.4,0,TAU); ctx.fill(); }
-  else if(kind==='elephant'){ circle(-r*0.85,-r*0.2,r*0.5); ctx.fill(); circle(r*0.85,-r*0.2,r*0.5); ctx.fill(); }
-  ctx.fillStyle=base; circle(0,0,r); ctx.fill();
-  if(kind==='elephant'){ ctx.fillStyle=base; rr(-r*0.18,r*0.1,r*0.36,r*0.95,r*0.18); ctx.fill(); }
-  ctx.fillStyle=cheek; circle(-r*0.55,r*0.15,r*0.2); ctx.fill(); circle(r*0.55,r*0.15,r*0.2); ctx.fill();
-  ctx.fillStyle='#4a3a55';
-  if(mood==='joy'){ ctx.lineWidth=r*0.12; ctx.strokeStyle='#4a3a55';
-    ctx.beginPath(); ctx.moveTo(-r*0.5,-r*0.25); ctx.lineTo(-r*0.2,-r*0.05); ctx.lineTo(-r*0.5,r*0.1); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(r*0.5,-r*0.25); ctx.lineTo(r*0.2,-r*0.05); ctx.lineTo(r*0.5,r*0.1); ctx.stroke();
-  } else if(mood==='wry'){ // 苦笑い：への字目＋汗
-    ctx.lineWidth=r*0.1; ctx.strokeStyle='#4a3a55';
-    ctx.beginPath(); ctx.arc(-r*0.32,-r*0.02,r*0.14,Math.PI*1.1,Math.PI*1.9); ctx.stroke();
-    ctx.beginPath(); ctx.arc(r*0.32,-r*0.02,r*0.14,Math.PI*1.1,Math.PI*1.9); ctx.stroke();
-  } else { const ey=mood==='sad'?-r*0.05:-r*0.1; circle(-r*0.32,ey,r*0.13); ctx.fill(); circle(r*0.32,ey,r*0.13); ctx.fill();
-    ctx.fillStyle='#fff'; circle(-r*0.28,ey-r*0.04,r*0.05); ctx.fill(); circle(r*0.36,ey-r*0.04,r*0.05); ctx.fill(); }
-  ctx.strokeStyle='#9a7a8a'; ctx.lineWidth=r*0.09; ctx.beginPath();
-  if(mood==='sad'){ ctx.arc(0,r*0.6,r*0.28,Math.PI*1.15,Math.PI*1.85); }
-  else if(mood==='love'||mood==='joy'){ ctx.arc(0,r*0.28,r*0.22,0.1*Math.PI,0.9*Math.PI); }
-  else if(mood==='wry'){ // ぐにゃっとした口
-    ctx.moveTo(-r*0.3,r*0.42); ctx.quadraticCurveTo(-r*0.1,r*0.28,0,r*0.42); ctx.quadraticCurveTo(r*0.1,r*0.56,r*0.3,r*0.4); }
-  else { ctx.arc(0,r*0.32,r*0.16,0.1*Math.PI,0.9*Math.PI); }
-  ctx.stroke();
-  if(mood==='love'){ for(let i=0;i<2;i++){ const ph=(t*0.002+i*0.5)%1; ctx.globalAlpha=1-ph; ctx.fillStyle='#ff6f9d'; heartPath(r*0.9,-r*0.6-ph*r*1.2,r*0.24*(1-ph*0.3)); ctx.fill(); } ctx.globalAlpha=1; }
-  if(mood==='sad'){ ctx.fillStyle='rgba(120,180,255,.85)'; circle(-r*0.32,r*0.25,r*0.08); ctx.fill(); }
-  if(mood==='wry'){ ctx.fillStyle='rgba(120,180,255,.9)'; // 汗
-    ctx.beginPath(); ctx.moveTo(r*0.72,-r*0.5); ctx.quadraticCurveTo(r*0.62,-r*0.28,r*0.78,-r*0.24); ctx.quadraticCurveTo(r*0.9,-r*0.34,r*0.72,-r*0.5); ctx.fill(); }
+  if(kind==='cat'){
+    for(const sgn of [-1,1]){ ctx.beginPath();
+      ctx.moveTo(sgn*r*0.34,-r*0.6); ctx.quadraticCurveTo(sgn*r*0.96,-r*1.28,sgn*r*0.92,-r*0.46);
+      ctx.quadraticCurveTo(sgn*r*0.68,-r*0.56,sgn*r*0.34,-r*0.6); ctx.closePath(); ctx.fill(); }
+    ctx.fillStyle=inner; for(const sgn of [-1,1]){ ctx.beginPath();
+      ctx.moveTo(sgn*r*0.5,-r*0.66); ctx.quadraticCurveTo(sgn*r*0.82,-r*1.04,sgn*r*0.8,-r*0.56);
+      ctx.quadraticCurveTo(sgn*r*0.64,-r*0.62,sgn*r*0.5,-r*0.66); ctx.closePath(); ctx.fill(); }
+  } else if(kind==='dog'){
+    for(const sgn of [-1,1]){ ctx.beginPath(); ctx.ellipse(sgn*r*0.82,r*0.04,r*0.34,r*0.66,sgn*0.45,0,TAU); ctx.fill(); }
+  } else {
+    for(const sgn of [-1,1]){ ctx.beginPath(); ctx.ellipse(sgn*r*0.92,-r*0.02,r*0.6,r*0.72,sgn*0.2,0,TAU); ctx.fill(); }
+    ctx.fillStyle=inner; for(const sgn of [-1,1]){ ctx.beginPath(); ctx.ellipse(sgn*r*0.96,r*0.02,r*0.38,r*0.46,sgn*0.2,0,TAU); ctx.fill(); }
+  }
+
+  /* 頭 */
+  ctx.fillStyle=body; circle(0,0,r); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.20)'; ctx.beginPath(); ctx.ellipse(0,-r*0.32,r*0.72,r*0.46,0,0,TAU); ctx.fill();
+  ctx.strokeStyle=outline; ctx.lineWidth=Math.max(1,r*0.04); circle(0,0,r); ctx.stroke();
+
+  /* 象の鼻＋牙 / 犬のマズル */
+  if(kind==='elephant'){
+    ctx.fillStyle=body; ctx.beginPath();
+    ctx.moveTo(-r*0.17,r*0.24); ctx.quadraticCurveTo(-r*0.22,r*0.82,-r*0.02,r*1.02);
+    ctx.quadraticCurveTo(r*0.22,r*1.18,r*0.17,r*0.86); ctx.lineTo(r*0.17,r*0.24); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(143,147,192,.35)'; ctx.lineWidth=r*0.045;
+    for(let i=1;i<=3;i++){ const yy=r*0.36+i*r*0.18; ctx.beginPath(); ctx.moveTo(-r*0.15,yy); ctx.lineTo(r*0.15,yy-r*0.02); ctx.stroke(); }
+    ctx.fillStyle='#fff'; for(const sgn of [-1,1]){ ctx.beginPath(); ctx.moveTo(sgn*r*0.13,r*0.52); ctx.lineTo(sgn*r*0.24,r*0.74); ctx.lineTo(sgn*r*0.05,r*0.62); ctx.closePath(); ctx.fill(); }
+  }
+  if(kind==='dog'){ ctx.fillStyle='#fbe6cf'; ctx.beginPath(); ctx.ellipse(0,r*0.36,r*0.52,r*0.4,0,0,TAU); ctx.fill(); }
+
+  /* ほっぺ */
+  ctx.fillStyle='rgba(255,150,190,.6)'; circle(-r*0.62,r*0.26,r*0.17); ctx.fill(); circle(r*0.62,r*0.26,r*0.17); ctx.fill();
+
+  /* 目 */
+  function openEye(sgn){
+    ctx.fillStyle='#3a3550'; ctx.beginPath(); ctx.ellipse(sgn*eyeX,eyeY,r*0.17,r*0.22,0,0,TAU); ctx.fill();
+    ctx.fillStyle='#fff'; circle(sgn*eyeX-r*0.055,eyeY-r*0.085,r*0.075); ctx.fill(); circle(sgn*eyeX+r*0.05,eyeY+r*0.06,r*0.035); ctx.fill();
+  }
+  function arcEye(sgn){ ctx.strokeStyle='#3a3550'; ctx.lineWidth=r*0.1; ctx.lineCap='round'; ctx.beginPath(); ctx.arc(sgn*eyeX,eyeY+r*0.03,r*0.16,Math.PI*1.12,Math.PI*1.88); ctx.stroke(); }
+  function droopEye(sgn){ ctx.strokeStyle='#3a3550'; ctx.lineWidth=r*0.1; ctx.lineCap='round'; ctx.beginPath(); ctx.arc(sgn*eyeX,eyeY-r*0.06,r*0.15,Math.PI*0.18,Math.PI*0.82); ctx.stroke(); }
+  if(mood==='joy'){ arcEye(-1); arcEye(1); }
+  else if(mood==='sad'){ droopEye(-1); droopEye(1); }
+  else if(mood==='wry'){ openEye(-1); arcEye(1); }
+  else { openEye(-1); openEye(1); }   // idle / love：うるうる
+
+  /* 鼻 */
+  if(kind==='cat'){ ctx.fillStyle=nose; ctx.beginPath(); ctx.moveTo(-r*0.08,r*0.34); ctx.lineTo(r*0.08,r*0.34); ctx.lineTo(0,r*0.43); ctx.closePath(); ctx.fill(); }
+  else if(kind==='dog'){ ctx.fillStyle='#5a4a55'; circle(0,r*0.22,r*0.1); ctx.fill(); ctx.fillStyle='rgba(255,255,255,.5)'; circle(-r*0.03,r*0.19,r*0.03); ctx.fill(); }
+
+  /* 口 */
+  const my = kind==='cat'? r*0.5 : (kind==='dog'? r*0.34 : r*0.56);
+  ctx.strokeStyle=kind==='dog'?'#7a5a55':'#9a7a8a'; ctx.lineWidth=r*0.07; ctx.lineCap='round';
+  if(mood==='sad'){ ctx.beginPath(); ctx.arc(0,my+r*0.34,r*0.2,Math.PI*1.2,Math.PI*1.8); ctx.stroke(); }
+  else if(mood==='wry'){ ctx.beginPath(); ctx.moveTo(-r*0.18,my); ctx.quadraticCurveTo(-r*0.04,my-r*0.12,r*0.06,my); ctx.quadraticCurveTo(r*0.14,my+r*0.12,r*0.22,my-r*0.05); ctx.stroke(); }
+  else if(kind==='cat'){ ctx.beginPath(); ctx.arc(-r*0.1,my-r*0.04,r*0.1,0,Math.PI); ctx.arc(r*0.1,my-r*0.04,r*0.1,0,Math.PI); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.arc(0,my-r*0.04,r*0.14,0.12*Math.PI,0.88*Math.PI); ctx.stroke(); }
+  // 喜び舌（犬）
+  if(kind==='dog' && (mood==='joy'||mood==='love')){ ctx.fillStyle='#ff8fb1'; ctx.beginPath(); ctx.ellipse(0,my+r*0.12,r*0.09,r*0.13,0,0,TAU); ctx.fill(); }
+
+  /* ひげ（猫） */
+  if(kind==='cat'){ ctx.strokeStyle='rgba(120,100,110,.45)'; ctx.lineWidth=Math.max(0.6,r*0.025);
+    for(const sgn of [-1,1]) for(let k=-1;k<=1;k++){ ctx.beginPath(); ctx.moveTo(sgn*r*0.4,r*0.34+k*r*0.08); ctx.lineTo(sgn*r*0.9,r*0.3+k*r*0.16); ctx.stroke(); } }
+
+  /* 表情エフェクト */
+  if(mood==='love'){ for(let i=0;i<2;i++){ const ph=(t*0.002+i*0.5)%1; ctx.globalAlpha=1-ph; ctx.fillStyle='#ff6f9d'; heartPath(r*0.95,-r*0.7-ph*r*1.2,r*0.26*(1-ph*0.3)); ctx.fill(); } ctx.globalAlpha=1; }
+  if(mood==='sad'){ ctx.fillStyle='rgba(120,180,255,.85)'; ctx.beginPath(); ctx.moveTo(-r*0.32,r*0.18); ctx.quadraticCurveTo(-r*0.42,r*0.36,-r*0.26,r*0.4); ctx.quadraticCurveTo(-r*0.16,r*0.32,-r*0.32,r*0.18); ctx.fill(); }
+  if(mood==='wry'){ ctx.fillStyle='rgba(120,180,255,.9)'; ctx.beginPath(); ctx.moveTo(r*0.78,-r*0.46); ctx.quadraticCurveTo(r*0.68,-r*0.22,r*0.84,-r*0.18); ctx.quadraticCurveTo(r*0.96,-r*0.3,r*0.78,-r*0.46); ctx.fill(); }
   ctx.restore();
 }
 
